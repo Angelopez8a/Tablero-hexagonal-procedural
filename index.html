@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forja de Tableros — generador hexagonal procedural</title>
+<meta name="description" content="Generador procedural de tableros hexagonales para juegos de mesa. Define el número de losetas, 5 tipos de terreno y descarga el resultado.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#141C1E;
+    --slate:#1D292B;
+    --slate-2:#243335;
+    --line:#33474A;
+    --chalk:#E9E6DC;
+    --muted:#8FA3A4;
+    --brass:#D9A441;
+    --brass-soft:#8a6a2a;
+    --paper:#F4F1E8;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:
+      radial-gradient(120% 80% at 12% 0%, #22333600 0%, #0e1416 100%),
+      var(--ink);
+    color:var(--chalk);
+    font-family:'Bricolage Grotesque', system-ui, sans-serif;
+    font-size:15px;
+    line-height:1.45;
+  }
+  a{color:var(--brass)}
+
+  header{
+    display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    padding:22px 26px 16px; border-bottom:1px solid var(--line);
+  }
+  header h1{
+    margin:0; font-size:22px; font-weight:800; letter-spacing:-.02em;
+  }
+  header .sub{color:var(--muted); font-size:13.5px}
+  .badge{
+    font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--brass); border:1px solid var(--brass-soft);
+    padding:3px 8px; border-radius:99px;
+  }
+
+  .app{display:grid; grid-template-columns:340px 1fr; gap:0; min-height:calc(100% - 70px)}
+  @media (max-width:900px){ .app{grid-template-columns:1fr} }
+
+  aside{
+    border-right:1px solid var(--line); padding:20px 22px 40px;
+    background:linear-gradient(180deg,#1a2527,#161f21);
+  }
+  main{padding:20px 22px 40px; display:flex; flex-direction:column; gap:14px}
+
+  .group{margin-bottom:22px}
+  .group > h2{
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted); margin:0 0 10px; font-family:'JetBrains Mono',monospace; font-weight:600;
+  }
+  label{display:block; font-size:13px; color:var(--chalk); margin-bottom:5px}
+  .hint{color:var(--muted); font-size:12.5px; margin:6px 0 0}
+
+  input[type=text], input[type=number], select{
+    width:100%; background:var(--slate-2); color:var(--chalk);
+    border:1px solid var(--line); border-radius:8px; padding:8px 10px;
+    font-family:'JetBrains Mono', monospace; font-size:13px;
+  }
+  input[type=range]{width:100%; accent-color:var(--brass)}
+  input[type=color]{
+    width:34px; height:34px; padding:0; border:1px solid var(--line);
+    border-radius:8px; background:none; cursor:pointer;
+  }
+  input:focus-visible, select:focus-visible, button:focus-visible{
+    outline:2px solid var(--brass); outline-offset:2px;
+  }
+
+  .row{display:flex; gap:8px; align-items:center}
+  .row > *{min-width:0}
+
+  button{
+    font-family:'Bricolage Grotesque',sans-serif; font-size:14px; font-weight:600;
+    background:var(--slate-2); color:var(--chalk); border:1px solid var(--line);
+    padding:9px 12px; border-radius:8px; cursor:pointer;
+    transition:background .12s ease, border-color .12s ease, transform .06s ease;
+  }
+  button:hover{background:#2c3d40; border-color:#48646a}
+  button:active{transform:translateY(1px)}
+  button.primary{
+    background:var(--brass); border-color:var(--brass); color:#1a1405; width:100%;
+  }
+  button.primary:hover{background:#e9b757}
+
+  .tile-row{
+    display:grid; grid-template-columns:34px 1fr 62px; gap:8px; align-items:center;
+    margin-bottom:8px;
+  }
+  .tile-row input[type=text]{font-family:'Bricolage Grotesque',sans-serif}
+  .weights-head{
+    display:grid; grid-template-columns:34px 1fr 62px; gap:8px;
+    font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+    font-family:'JetBrains Mono',monospace; margin-bottom:6px;
+  }
+
+  .switch{display:flex; gap:6px; background:var(--slate-2); padding:4px; border-radius:9px; border:1px solid var(--line)}
+  .switch button{flex:1; background:none; border:none; padding:7px 6px; font-size:13px; color:var(--muted); border-radius:6px}
+  .switch button[aria-pressed=true]{background:var(--brass); color:#1a1405}
+
+  .check{display:flex; gap:8px; align-items:center; font-size:13.5px; margin-top:10px}
+  .check input{accent-color:var(--brass); width:16px; height:16px}
+
+  .stage{
+    background:var(--paper); border-radius:14px; border:1px solid #cdc7b6;
+    padding:10px; display:flex; justify-content:center; align-items:center;
+    box-shadow:0 18px 40px -22px #000;
+  }
+  canvas{max-width:100%; height:auto; display:block; border-radius:6px}
+
+  .readout{
+    display:flex; gap:18px; flex-wrap:wrap; align-items:center;
+    font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted);
+  }
+  .readout b{color:var(--chalk); font-weight:600}
+
+  .legend{display:flex; flex-wrap:wrap; gap:10px}
+  .chip{
+    display:flex; align-items:center; gap:8px; border:1px solid var(--line);
+    border-radius:99px; padding:5px 12px 5px 6px; font-size:13px; background:var(--slate);
+  }
+  .chip .sw{width:18px; height:18px; border-radius:5px; border:1px solid #0004}
+  .chip .n{font-family:'JetBrains Mono',monospace; color:var(--muted); font-size:12px}
+
+  .actions{display:flex; gap:8px; flex-wrap:wrap}
+  footer{padding:0 26px 30px; color:var(--muted); font-size:12.5px}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Forja de Tableros</h1>
+  <span class="badge">generador hexagonal</span>
+  <span class="sub">Tablero hexagonal grande, losetas hexagonales dentro, 5 tipos de terreno.</span>
+</header>
+
+<div class="app">
+  <aside>
+    <div class="group">
+      <h2>Tamaño</h2>
+      <label for="count">Número de losetas</label>
+      <div class="row">
+        <input type="number" id="count" min="1" max="1200" step="1" value="61">
+        <button id="minus" title="Anillo anterior">−</button>
+        <button id="plus" title="Anillo siguiente">+</button>
+      </div>
+      <div class="check">
+        <input type="checkbox" id="perfect" checked>
+        <label for="perfect" style="margin:0">Ajustar a hexágono perfecto</label>
+      </div>
+      <p class="hint" id="shapeHint"></p>
+    </div>
+
+    <div class="group">
+      <h2>Semilla</h2>
+      <div class="row">
+        <input type="text" id="seed" value="mesa-01">
+        <button id="reroll" title="Semilla aleatoria">↻</button>
+      </div>
+      <p class="hint">La misma semilla y los mismos ajustes dan siempre el mismo tablero.</p>
+    </div>
+
+    <div class="group">
+      <h2>Distribución</h2>
+      <div class="switch" role="group" aria-label="Modo de distribución">
+        <button id="modeRegions" aria-pressed="true">Regiones</button>
+        <button id="modeRandom" aria-pressed="false">Aleatorio</button>
+      </div>
+      <div id="fragWrap" style="margin-top:12px">
+        <label for="frag">Fragmentación de regiones: <span id="fragVal">3</span> núcleos por tipo</label>
+        <input type="range" id="frag" min="1" max="10" value="3">
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Tipos de loseta</h2>
+      <div class="weights-head"><span>Color</span><span>Nombre</span><span>Peso</span></div>
+      <div id="types"></div>
+      <p class="hint">El peso reparte las losetas en proporción. Pon 0 para excluir un tipo.</p>
+    </div>
+
+    <div class="group">
+      <h2>Etiquetas</h2>
+      <div class="check"><input type="checkbox" id="showLetter" checked><label for="showLetter" style="margin:0">Inicial del terreno en cada loseta</label></div>
+      <div class="check"><input type="checkbox" id="showCoords"><label for="showCoords" style="margin:0">Coordenadas (q, r)</label></div>
+      <div class="check"><input type="checkbox" id="showLegend" checked><label for="showLegend" style="margin:0">Leyenda en la imagen descargada</label></div>
+    </div>
+
+    <button class="primary" id="generate">Generar tablero</button>
+  </aside>
+
+  <main>
+    <div class="stage"><canvas id="board" width="900" height="820" aria-label="Vista previa del tablero generado"></canvas></div>
+
+    <div class="readout">
+      <span><b id="rCount">0</b> losetas</span>
+      <span>radio <b id="rRadius">0</b></span>
+      <span>semilla <b id="rSeed">—</b></span>
+    </div>
+
+    <div class="legend" id="legend"></div>
+
+    <div class="actions">
+      <button id="dlPng">Descargar PNG</button>
+      <button id="dlSvg">Descargar SVG</button>
+      <button id="dlJson">Descargar JSON</button>
+      <button id="dlList">Descargar lista de piezas (CSV)</button>
+    </div>
+  </main>
+</div>
+
+<footer>
+  El PNG sale a 3× para imprimir. El JSON trae las coordenadas axiales de cada loseta con su tipo, listo para importar en Unity, Godot o una hoja de cálculo.
+</footer>
+
+<script>
+/* ---------- Aleatoriedad reproducible ---------- */
+function hashSeed(str){
+  let h = 2166136261 >>> 0;
+  for (let i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* ---------- Geometría hexagonal (axial, punta arriba) ---------- */
+const DIRS = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+const SQ3 = Math.sqrt(3);
+
+function spiral(n){
+  const out = [{q:0,r:0}];
+  let ring = 1;
+  while (out.length < n){
+    let q = -ring, r = ring;
+    for (let i=0;i<6;i++){
+      for (let j=0;j<ring;j++){
+        out.push({q,r});
+        q += DIRS[i][0]; r += DIRS[i][1];
+      }
+    }
+    ring++;
+  }
+  return out.slice(0, n);
+}
+const hexCount = R => 3*R*R + 3*R + 1;
+function radiusOf(n){ let R=0; while (hexCount(R) < n) R++; return R; }
+function isPerfect(n){ const R = radiusOf(n); return hexCount(R) === n; }
+function snapPerfect(n){
+  let R = 0;
+  while (hexCount(R) < n) R++;
+  const hi = hexCount(R), lo = hexCount(Math.max(0,R-1));
+  return (n - lo) <= (hi - n) ? lo : hi;
+}
+
+/* ---------- Estado ---------- */
+const DEFAULT_TYPES = [
+  {name:'Bosque',   color:'#3F7D5A', weight:5},
+  {name:'Pradera',  color:'#A9B85B', weight:5},
+  {name:'Desierto', color:'#E0B25C', weight:3},
+  {name:'Montaña',  color:'#7C7A8C', weight:3},
+  {name:'Agua',     color:'#3E7CA8', weight:2}
+];
+let types = DEFAULT_TYPES.map(t => ({...t}));
+let mode = 'regions';
+let board = null; // {tiles:[{q,r,type}], radius, seed, counts}
+
+/* ---------- UI: tipos ---------- */
+const typesEl = document.getElementById('types');
+function renderTypeRows(){
+  typesEl.innerHTML = '';
+  types.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = 'tile-row';
+    row.innerHTML = `
+      <input type="color" value="${t.color}" aria-label="Color del tipo ${i+1}">
+      <input type="text" value="${t.name}" aria-label="Nombre del tipo ${i+1}">
+      <input type="number" min="0" max="99" step="1" value="${t.weight}" aria-label="Peso del tipo ${i+1}">`;
+    const [c, n, w] = row.querySelectorAll('input');
+    c.oninput = e => { types[i].color = e.target.value; draw(); paintLegend(); };
+    n.oninput = e => { types[i].name  = e.target.value; draw(); paintLegend(); };
+    w.oninput = e => { types[i].weight = Math.max(0, +e.target.value || 0); };
+    typesEl.appendChild(row);
+  });
+}
+renderTypeRows();
+
+/* ---------- Reparto de tipos ---------- */
+function targetCounts(n, rng){
+  const total = types.reduce((s,t)=> s + t.weight, 0);
+  if (total <= 0) return types.map((_,i) => i === 0 ? n : 0);
+  const exact = types.map(t => n * t.weight / total);
+  const base  = exact.map(Math.floor);
+  let rest = n - base.reduce((a,b)=>a+b,0);
+  const order = exact
+    .map((v,i)=>({f: v - Math.floor(v), i, w: types[i].weight}))
+    .filter(o => o.w > 0)
+    .sort((a,b)=> b.f - a.f || a.i - b.i);
+  let k = 0;
+  while (rest > 0 && order.length){ base[order[k % order.length].i]++; rest--; k++; }
+  return base;
+}
+
+function assign(tiles, rng, targets, frag){
+  const n = tiles.length;
+  const owner = new Array(n).fill(-1);
+
+  if (mode === 'random'){
+    const bag = [];
+    targets.forEach((c,i)=>{ for(let k=0;k<c;k++) bag.push(i); });
+    for (let i = bag.length - 1; i > 0; i--){
+      const j = Math.floor(rng() * (i + 1));
+      [bag[i], bag[j]] = [bag[j], bag[i]];
+    }
+    bag.forEach((t, i) => owner[i] = t);
+    return owner;
+  }
+
+  // Regiones: crecimiento simultáneo desde núcleos, respetando las cuotas.
+  const index = new Map();
+  tiles.forEach((t,i)=> index.set(t.q + ',' + t.r, i));
+  const neighbours = tiles.map(t => DIRS
+    .map(d => index.get((t.q + d[0]) + ',' + (t.r + d[1])))
+    .filter(v => v !== undefined));
+
+  const left = targets.slice();
+  const free = tiles.map((_,i)=>i);
+  const takeFree = () => {
+    while (free.length){
+      const j = Math.floor(rng() * free.length);
+      const i = free[j]; free[j] = free[free.length-1]; free.pop();
+      if (owner[i] === -1) return i;
+    }
+    return -1;
+  };
+  const claim = (i, t, cand) => { owner[i] = t; left[t]--; neighbours[i].forEach(nb => { if (owner[nb] === -1) cand.push(nb); }); };
+
+  const clusters = [];
+  types.forEach((_, t) => {
+    if (!left[t]) return;
+    const seeds = Math.min(frag, left[t]);
+    for (let s = 0; s < seeds; s++){
+      const i = takeFree();
+      if (i < 0) return;
+      const c = {type:t, cand:[]};
+      claim(i, t, c.cand);
+      clusters.push(c);
+    }
+  });
+
+  let pending = left.reduce((a,b)=>a+b,0);
+  let guard = n * 40;
+  while (pending > 0 && guard-- > 0){
+    const active = clusters.filter(c => left[c.type] > 0);
+    if (!active.length) break;
+    for (let k = active.length - 1; k > 0; k--){
+      const j = Math.floor(rng() * (k + 1));
+      [active[k], active[j]] = [active[j], active[k]];
+    }
+    for (const c of active){
+      if (left[c.type] <= 0) continue;
+      let grew = false;
+      while (c.cand.length){
+        const j = Math.floor(rng() * c.cand.length);
+        const i = c.cand[j]; c.cand[j] = c.cand[c.cand.length-1]; c.cand.pop();
+        if (owner[i] === -1){ claim(i, c.type, c.cand); grew = true; break; }
+      }
+      if (!grew){
+        const i = takeFree();
+        if (i >= 0) claim(i, c.type, c.cand);
+      }
+      pending--;
+    }
+  }
+  // Cierre de seguridad
+  for (let i=0;i<n;i++) if (owner[i] === -1){
+    const t = left.findIndex(v => v > 0);
+    owner[i] = t >= 0 ? t : 0; if (t >= 0) left[t]--;
+  }
+  return owner;
+}
+
+/* ---------- Generar ---------- */
+function generate(){
+  let n = Math.max(1, Math.min(1200, Math.round(+document.getElementById('count').value || 1)));
+  if (document.getElementById('perfect').checked) n = snapPerfect(n);
+  document.getElementById('count').value = n;
+
+  const seed = document.getElementById('seed').value.trim() || 'mesa';
+  const rng = mulberry32(hashSeed(seed + '|' + n + '|' + mode + '|' + document.getElementById('frag').value + '|' + types.map(t=>t.weight).join(',')));
+  const tiles = spiral(n);
+  const targets = targetCounts(n, rng);
+  const owner = assign(tiles, rng, targets, +document.getElementById('frag').value);
+
+  board = {
+    tiles: tiles.map((t,i)=>({q:t.q, r:t.r, type:owner[i]})),
+    radius: radiusOf(n), seed, counts: targets
+  };
+
+  document.getElementById('rCount').textContent = n;
+  document.getElementById('rRadius').textContent = board.radius;
+  document.getElementById('rSeed').textContent = seed;
+  paintLegend();
+  updateHint();
+  draw();
+}
+
+function paintLegend(){
+  const el = document.getElementById('legend');
+  el.innerHTML = '';
+  if (!board) return;
+  const real = new Array(types.length).fill(0);
+  board.tiles.forEach(t => real[t.type]++);
+  types.forEach((t,i)=>{
+    if (!real[i]) return;
+    const c = document.createElement('div');
+    c.className = 'chip';
+    c.innerHTML = `<span class="sw" style="background:${t.color}"></span>${t.name} <span class="n">${real[i]}</span>`;
+    el.appendChild(c);
+  });
+}
+
+function updateHint(){
+  const n = +document.getElementById('count').value;
+  const R = radiusOf(n);
+  const hint = document.getElementById('shapeHint');
+  if (isPerfect(n)) hint.textContent = `Hexágono completo de radio ${R} (${R} anillos alrededor del centro).`;
+  else hint.textContent = `Anillo exterior incompleto. Hexágonos perfectos cercanos: ${hexCount(Math.max(0,R-1))} y ${hexCount(R)}.`;
+}
+
+/* ---------- Dibujo ---------- */
+function layout(tiles, W, H, pad){
+  const pts = tiles.map(t => ({x: SQ3 * (t.q + t.r/2), y: 1.5 * t.r}));
+  const minX = Math.min(...pts.map(p=>p.x)), maxX = Math.max(...pts.map(p=>p.x));
+  const minY = Math.min(...pts.map(p=>p.y)), maxY = Math.max(...pts.map(p=>p.y));
+  const w = (maxX - minX) + SQ3, h = (maxY - minY) + 2;
+  const size = Math.min((W - pad*2) / w, (H - pad*2) / h);
+  const ox = (W - (maxX - minX) * size) / 2 - minX * size;
+  const oy = (H - (maxY - minY) * size) / 2 - minY * size;
+  return {pts, size, ox, oy};
+}
+
+function hexPath(ctx, cx, cy, s){
+  ctx.beginPath();
+  for (let i=0;i<6;i++){
+    const a = Math.PI/180 * (60*i - 30);
+    const x = cx + s*Math.cos(a), y = cy + s*Math.sin(a);
+    i ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+  }
+  ctx.closePath();
+}
+
+function render(ctx, W, H, scale, withLegend){
+  ctx.save();
+  ctx.scale(scale, scale);
+  ctx.fillStyle = '#F4F1E8';
+  ctx.fillRect(0,0,W,H);
+  if (!board){ ctx.restore(); return; }
+
+  const legendH = withLegend ? 74 : 0;
+  const L = layout(board.tiles, W, H - legendH, 26);
+  const gap = L.size * 0.965;
+  const letters = document.getElementById('showLetter').checked;
+  const coords  = document.getElementById('showCoords').checked;
+
+  board.tiles.forEach((t, i) => {
+    const cx = L.ox + L.pts[i].x * L.size;
+    const cy = L.oy + L.pts[i].y * L.size;
+    const col = types[t.type] ? types[t.type].color : '#999';
+    hexPath(ctx, cx, cy, gap);
+    ctx.fillStyle = col; ctx.fill();
+    ctx.lineWidth = Math.max(0.8, L.size * 0.055);
+    ctx.strokeStyle = 'rgba(20,28,30,.55)'; ctx.stroke();
+
+    if (letters || coords){
+      const dark = luminance(col) > 0.55;
+      ctx.fillStyle = dark ? 'rgba(20,28,30,.82)' : 'rgba(255,255,255,.9)';
+      ctx.textAlign = 'center';
+      if (letters){
+        ctx.font = `600 ${L.size*0.62}px "JetBrains Mono", monospace`;
+        ctx.textBaseline = coords ? 'alphabetic' : 'middle';
+        const name = types[t.type] ? types[t.type].name : '?';
+        ctx.fillText(name.charAt(0).toUpperCase(), cx, coords ? cy : cy + L.size*0.02);
+      }
+      if (coords){
+        ctx.font = `400 ${L.size*0.3}px "JetBrains Mono", monospace`;
+        ctx.textBaseline = 'top';
+        ctx.fillText(`${t.q},${t.r}`, cx, cy + L.size*0.14);
+      }
+    }
+  });
+
+  if (withLegend){
+    const y = H - legendH + 22;
+    const real = new Array(types.length).fill(0);
+    board.tiles.forEach(t => real[t.type]++);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#141C1E';
+    ctx.font = '600 17px "Bricolage Grotesque", sans-serif';
+    ctx.fillText(`${board.tiles.length} losetas · radio ${board.radius} · semilla "${board.seed}"`, 26, y);
+    let x = 26;
+    const y2 = y + 30;
+    types.forEach((t,i)=>{
+      if (!real[i]) return;
+      ctx.fillStyle = t.color;
+      ctx.beginPath(); ctx.roundRect(x, y2 - 9, 18, 18, 4); ctx.fill();
+      ctx.strokeStyle = 'rgba(20,28,30,.35)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = '#141C1E';
+      ctx.font = '400 14px "Bricolage Grotesque", sans-serif';
+      const label = `${t.name} ${real[i]}`;
+      ctx.fillText(label, x + 25, y2 + 1);
+      x += 25 + ctx.measureText(label).width + 22;
+    });
+  }
+  ctx.restore();
+}
+
+function luminance(hex){
+  const c = hex.replace('#','');
+  const r = parseInt(c.substr(0,2),16)/255, g = parseInt(c.substr(2,2),16)/255, b = parseInt(c.substr(4,2),16)/255;
+  return 0.299*r + 0.587*g + 0.114*b;
+}
+
+const cv = document.getElementById('board');
+function draw(){
+  const W = 900, H = 820;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = W * dpr; cv.height = H * dpr;
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  render(cv.getContext('2d'), W, H, dpr, false);
+}
+
+/* ---------- Descargas ---------- */
+function download(blob, name){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  setTimeout(()=> URL.revokeObjectURL(url), 2000);
+}
+const fileName = ext => `tablero-${board.tiles.length}-${board.seed.replace(/[^\w-]+/g,'_')}.${ext}`;
+
+document.getElementById('dlPng').onclick = () => {
+  if (!board) return;
+  const W = 1400, H = 1320, S = 3;
+  const off = document.createElement('canvas');
+  off.width = W*S; off.height = H*S;
+  render(off.getContext('2d'), W, H, S, document.getElementById('showLegend').checked);
+  off.toBlob(b => download(b, fileName('png')), 'image/png');
+};
+
+document.getElementById('dlSvg').onclick = () => {
+  if (!board) return;
+  const W = 1400, H = 1320;
+  const L = layout(board.tiles, W, H, 30);
+  const gap = L.size * 0.965;
+  const letters = document.getElementById('showLetter').checked;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+<rect width="${W}" height="${H}" fill="#F4F1E8"/>\n`;
+  board.tiles.forEach((t,i)=>{
+    const cx = L.ox + L.pts[i].x * L.size, cy = L.oy + L.pts[i].y * L.size;
+    const pts = [];
+    for (let k=0;k<6;k++){
+      const a = Math.PI/180*(60*k-30);
+      pts.push(`${(cx+gap*Math.cos(a)).toFixed(2)},${(cy+gap*Math.sin(a)).toFixed(2)}`);
+    }
+    const col = types[t.type] ? types[t.type].color : '#999';
+    s += `<polygon points="${pts.join(' ')}" fill="${col}" stroke="#141C1E" stroke-opacity=".55" stroke-width="${(L.size*0.055).toFixed(2)}"/>\n`;
+    if (letters){
+      const name = types[t.type] ? types[t.type].name : '?';
+      const fill = luminance(col) > 0.55 ? '#141C1E' : '#ffffff';
+      s += `<text x="${cx.toFixed(2)}" y="${(cy + L.size*0.22).toFixed(2)}" font-family="monospace" font-size="${(L.size*0.62).toFixed(1)}" font-weight="600" fill="${fill}" text-anchor="middle">${name.charAt(0).toUpperCase()}</text>\n`;
+    }
+  });
+  s += '</svg>';
+  download(new Blob([s], {type:'image/svg+xml'}), fileName('svg'));
+};
+
+document.getElementById('dlJson').onclick = () => {
+  if (!board) return;
+  const data = {
+    generator: 'Forja de Tableros',
+    seed: board.seed,
+    tileCount: board.tiles.length,
+    radius: board.radius,
+    perfectHex: isPerfect(board.tiles.length),
+    orientation: 'pointy-top',
+    coordinates: 'axial (q, r)',
+    mode,
+    types: types.map(t => ({name:t.name, color:t.color, weight:t.weight})),
+    tiles: board.tiles.map(t => ({q:t.q, r:t.r, type:t.type, name: types[t.type].name}))
+  };
+  download(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}), fileName('json'));
+};
+
+document.getElementById('dlList').onclick = () => {
+  if (!board) return;
+  const real = new Array(types.length).fill(0);
+  board.tiles.forEach(t => real[t.type]++);
+  let csv = 'tipo,cantidad,color\n';
+  types.forEach((t,i)=>{ if (real[i]) csv += `${t.name},${real[i]},${t.color}\n`; });
+  csv += '\nq,r,tipo\n';
+  board.tiles.forEach(t => csv += `${t.q},${t.r},${types[t.type].name}\n`);
+  download(new Blob([csv], {type:'text/csv'}), fileName('csv'));
+};
+
+/* ---------- Eventos ---------- */
+document.getElementById('generate').onclick = generate;
+document.getElementById('reroll').onclick = () => {
+  document.getElementById('seed').value = Math.random().toString(36).slice(2, 8);
+  generate();
+};
+document.getElementById('plus').onclick = () => {
+  const n = +document.getElementById('count').value;
+  document.getElementById('count').value = hexCount(radiusOf(n) + (isPerfect(n) ? 1 : 0));
+  generate();
+};
+document.getElementById('minus').onclick = () => {
+  const n = +document.getElementById('count').value;
+  document.getElementById('count').value = hexCount(Math.max(0, radiusOf(n) - 1));
+  generate();
+};
+document.getElementById('count').oninput = updateHint;
+document.getElementById('frag').oninput = e => document.getElementById('fragVal').textContent = e.target.value;
+document.getElementById('showLetter').onchange = draw;
+document.getElementById('showCoords').onchange = draw;
+function setMode(m){
+  mode = m;
+  document.getElementById('modeRegions').setAttribute('aria-pressed', m === 'regions');
+  document.getElementById('modeRandom').setAttribute('aria-pressed', m === 'random');
+  document.getElementById('fragWrap').style.display = m === 'regions' ? '' : 'none';
+  generate();
+}
+document.getElementById('modeRegions').onclick = () => setMode('regions');
+document.getElementById('modeRandom').onclick = () => setMode('random');
+
+generate();
+</script>
+</body>
+</html>
